@@ -21,3 +21,10 @@ class DocumentChunk:
     text: str
     metadata: dict[str, Any] = field(default_factory=dict)
 
+
+@dataclass(slots=True)
+class RetrievedChunk:
+    """A document chunk paired with its retrieval relevance score."""
+
+    chunk: DocumentChunk
+    score: float
