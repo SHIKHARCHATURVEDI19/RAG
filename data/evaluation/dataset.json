@@ -1,0 +1,17 @@
+[
+  {
+    "question": "How long do customers have to request a refund?",
+    "expected_answer": "30 calendar days",
+    "expected_sources": [
+      "refund-policy.md"
+    ]
+  },
+  {
+    "question": "What must a refund request include?",
+    "expected_answer": "order number and reason for the request",
+    "expected_sources": [
+      "refund-policy.md"
+    ]
+  }
+]
+
