@@ -1,0 +1,12 @@
+numpy
+torch
+sentence-transformers
+pypdf
+python-dotenv
+fastapi
+uvicorn
+pydantic
+pytest
+httpx
+tqdm
+
