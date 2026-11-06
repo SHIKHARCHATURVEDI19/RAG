@@ -17,10 +17,6 @@ def _tokens(text: str) -> set[str]:
     return set(re.findall(r"\w+", text.casefold(), flags=re.UNICODE))
 
 
-def _normalized(text: str) -> str:
-    return " ".join(re.findall(r"\w+", text.casefold(), flags=re.UNICODE))
-
-
 @dataclass(slots=True)
 class EvaluationCase:
     question: str
@@ -82,8 +78,10 @@ class Evaluator:
             if retrieved_sources
             else float(not expected_sources)
         )
+        expected_terms = _tokens(case.expected_answer)
+        answer_terms = _tokens(result.answer)
         answer_correctness = float(
-            _normalized(case.expected_answer) in _normalized(result.answer)
+            expected_terms.issubset(answer_terms) if expected_terms else True
         )
 
         return {
@@ -120,4 +118,3 @@ class Evaluator:
             "metrics": summary,
             "results": results,
         }
-

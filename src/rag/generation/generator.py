@@ -75,12 +75,18 @@ class Generator:
         api_key: str | None = None,
         model: str | None = None,
         base_url: str | None = None,
+        provider: str = "auto",
         timeout: float = 60.0,
     ) -> None:
+        if provider not in {"auto", "extractive", "openai_compatible"}:
+            raise ValueError(
+                "provider must be auto, extractive, or openai_compatible"
+            )
         self.completion_fn = completion_fn
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         self.base_url = (base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
+        self.provider = provider
         self.timeout = timeout
 
     @staticmethod
@@ -94,17 +100,38 @@ class Generator:
         ]
 
     @staticmethod
-    def _extractive_fallback(context: str) -> str:
-        content_lines = [
-            line.strip()
-            for line in context.splitlines()
-            if line.strip() and not line.lstrip().startswith("[Source ")
-        ]
-        if not content_lines:
+    def _extractive_fallback(question: str, context: str) -> str:
+        """Select the most query-relevant evidence sentence for offline use."""
+        question_terms = set(re.findall(r"\w+", question.casefold(), re.UNICODE))
+        candidates: list[tuple[int, str]] = []
+        source_number = 1
+        for line in context.splitlines():
+            source_match = re.match(r"\[Source (\d+):", line.strip())
+            if source_match:
+                source_number = int(source_match.group(1))
+                continue
+            cleaned = line.strip()
+            if not cleaned or cleaned.startswith("#"):
+                continue
+            for sentence in re.split(r"(?<=[.!?])\s+", cleaned):
+                if sentence:
+                    candidates.append((source_number, sentence))
+        if not candidates:
             return INSUFFICIENT_INFORMATION
-        first_passage = content_lines[0]
-        sentence = re.split(r"(?<=[.!?])\s+", first_passage, maxsplit=1)[0]
-        return f"{sentence} [1]"
+
+        final_term = next(
+            reversed(re.findall(r"\w+", question.casefold(), re.UNICODE)), ""
+        )
+
+        def relevance(candidate: tuple[int, str]) -> tuple[int, int]:
+            terms = set(re.findall(r"\w+", candidate[1].casefold(), re.UNICODE))
+            return (
+                len(question_terms & terms),
+                int(bool(final_term and final_term in terms)),
+            )
+
+        citation_id, sentence = max(candidates, key=relevance)
+        return f"{sentence} [{citation_id}]"
 
     def generate(self, question: str, context: str) -> str:
         """Answer a question using only the supplied context."""
@@ -117,8 +144,14 @@ class Generator:
         if self.completion_fn is not None:
             answer = self.completion_fn(messages).strip()
             return answer or INSUFFICIENT_INFORMATION
+        if self.provider == "extractive" or (
+            self.provider == "auto" and not self.api_key
+        ):
+            return self._extractive_fallback(question, context)
         if not self.api_key:
-            return self._extractive_fallback(context)
+            raise RuntimeError(
+                "OPENAI_API_KEY is required for the openai_compatible provider"
+            )
 
         response = httpx.post(
             f"{self.base_url}/chat/completions",
@@ -133,4 +166,3 @@ class Generator:
         except (KeyError, IndexError, TypeError, AttributeError) as error:
             raise RuntimeError("Generation provider returned an invalid response") from error
         return answer or INSUFFICIENT_INFORMATION
-

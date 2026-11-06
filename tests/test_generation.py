@@ -1,3 +1,5 @@
+import pytest
+
 from rag.generation import ContextBuilder, Generator
 from rag.generation.generator import INSUFFICIENT_INFORMATION
 from rag.schemas import DocumentChunk, RetrievedChunk
@@ -63,3 +65,24 @@ def test_offline_generator_uses_grounded_fallback(monkeypatch) -> None:
 
     assert answer == "Refunds are available for 30 days. [1]"
 
+
+def test_offline_generator_selects_the_most_relevant_sentence(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    answer = Generator(api_key=None).generate(
+        "What must a refund request include?",
+        "[Source 1: policy.md]\n"
+        "Customers may request a refund within 30 days. "
+        "The request must include the order number and a reason.",
+    )
+
+    assert answer == "The request must include the order number and a reason. [1]"
+
+
+def test_explicit_remote_provider_requires_an_api_key(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    generator = Generator(api_key=None, provider="openai_compatible")
+
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+        generator.generate("Question?", "[Source 1: policy.md]\nEvidence.")

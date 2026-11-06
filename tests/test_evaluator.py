@@ -45,3 +45,22 @@ def test_evaluator_rejects_empty_dataset() -> None:
     with pytest.raises(ValueError, match="empty"):
         Evaluator(StubPipeline()).evaluate([])
 
+
+def test_answer_correctness_allows_non_semantic_article_differences() -> None:
+    class ArticlePipeline:
+        def query(self, question: str, top_k: int | None = None) -> RAGResult:
+            return RAGResult(
+                answer="The order number and the reason.",
+                sources=[],
+                retrieved_chunks=[],
+            )
+
+    case = EvaluationCase(
+        question="What is required?",
+        expected_answer="order number and reason",
+        expected_sources=[],
+    )
+
+    report = Evaluator(ArticlePipeline()).evaluate([case])
+
+    assert report["metrics"]["answer_correctness"] == 1.0
